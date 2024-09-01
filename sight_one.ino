@@ -2,6 +2,11 @@
 #include "camera_server.h"
 #include "bluetooth.h"
 
+const byte ledPins[] = {40, 39, 38};
+const byte chns[] = {0, 1, 2};
+int red, green, blue;
+int transistor = 14;
+
 enum Led {
   RED,
   GREEN,
