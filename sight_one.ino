@@ -2,10 +2,10 @@
 #include "camera_server.h"
 #include "bluetooth.h"
 
-const byte ledPins[] = {40, 39, 38};
+const byte ledPins[] = {RED_PIN, GREEN_PIN, BLUE_PIN};
 const byte chns[] = {0, 1, 2};
 int red, green, blue;
-int transistor = 14;
+int transistor = TRANSISTOR_PIN;
 
 enum Led {
   RED,
@@ -66,20 +66,48 @@ void batteryStatus(Led led, int cycles, float transitionTime, float highTime) {
 
 void setup() { 
   Serial.begin(115200); 
+
+  for (int i = 0; i < 3; i++) { //setup the pwm channels,1KHz,8bit
+      ledcAttachChannel(ledPins[i], 1000, 8, chns[i]);
+    }
+
+    pinMode(transistor, OUTPUT);
+
+    // set the resolution to 12 bits (0-4095)
+    analogReadResolution(12);
+
+    digitalWrite(transistor, HIGH);
+
+    int analogVolts = analogReadMilliVolts(1);
+    Serial.println("ADC millivolts value = ");
+    Serial.print(analogVolts);
+
+    digitalWrite(transistor, LOW);
+
+    if (analogVolts > 2900) {
+      batteryStatus(GREEN, 2, 0.5, 1.0);
+    }
+    else if (analogVolts > 2500) {
+      batteryStatus(YELLOW, 2, 0.5, 1.0);
+    }
+    else {
+      batteryStatus(RED, 3, 0.5, 1.0);
+    }
+
   Serial.println(); 
   Serial.println(); 
 
-  setupBLE("sight one");
+  setupBLE(DEVICE_NAME);
   serverSetup();
 } 
   
 void loop() { 
-    loopBLE();
+  loopBLE();
 
   if (canUpdateCredentials) {
     canUpdateCredentials = false;
 
     setNetwork(ssid, password);
-    notify("IP:" + WiFi.localIP());
+    notify("IP:" + WiFi.localIP().toString());
   }
 } 
