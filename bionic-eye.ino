@@ -2,17 +2,133 @@
 #include "camera_server.h"
 #include "bluetooth.h"
 
-const byte ledPins[] = {RED_PIN, GREEN_PIN, BLUE_PIN};
-const byte chns[] = {0, 1, 2};
-int red, green, blue;
-int transistor = TRANSISTOR_PIN;
-
 enum Led {
   RED,
   GREEN,
   YELLOW,
   BLUE
 };
+
+enum Mode {
+  DYNAMIC,
+  STATIC
+};
+
+const byte ledPins[] = {RED_PIN, GREEN_PIN, BLUE_PIN};
+const byte chns[] = {0, 1, 2};
+int red, green, blue;
+int transistor = TRANSISTOR_PIN;
+
+int vibration = VIBRATION_PIN;
+int touch = TOUCH_PIN;
+
+bool isTouching = false;
+bool blockTouch;
+
+int amountOfClicks = 0;
+int maxAmountOfCLicks = 2;
+
+Mode mode = DYNAMIC;
+
+long longPressTime = 0;
+int longPressDuration = 400;
+long quickPressTime = 0;
+int quickPressDuration = 500; 
+
+int amountOfVibrations = 0;
+int maxAmountOfVibrations = 2;
+
+bool isVibrating = false;
+bool wasVibrating = false;
+bool canVibrate = false;
+long vibrationTime = 0;
+int vibrationDuration = 0;
+int vibrationPauseDuration = 100;
+
+void clickDetection() {
+  if (canVibrate) {
+    return;
+  }
+
+  if (digitalRead(touch)) {
+    if (blockTouch) {
+      return;
+    }
+
+    if (!isTouching) {
+      if (amountOfClicks >= maxAmountOfCLicks && millis() - quickPressTime <= quickPressDuration) {
+        amountOfClicks = 0;
+        notify("MODE:QUICK-SHOT");
+
+        blockTouch = true;
+        canVibrate = true;
+
+        vibrationTime = millis();
+        vibrationDuration = 300;
+        amountOfVibrations = 0;
+        maxAmountOfVibrations = 1;
+        isVibrating = true;
+      }
+
+      quickPressTime = millis();
+      longPressTime = millis();
+      amountOfClicks++;
+      isTouching = true;
+    }
+
+    if (isTouching && millis() - longPressTime >= longPressDuration) {
+      switch (mode) {
+        case DYNAMIC:
+          notify("MODE:STATIC");
+          mode = STATIC;
+          maxAmountOfVibrations = 3;
+          break;
+        case STATIC:
+          notify("MODE:DYNAMIC");
+          mode = DYNAMIC;
+          maxAmountOfVibrations = 2;
+          break;
+      }
+
+      amountOfClicks = 0;
+      canVibrate = true;
+
+      vibrationTime = millis();
+      vibrationDuration = 250;
+      amountOfVibrations = 0;
+      isVibrating = true;
+
+      blockTouch = true;
+    }
+  }
+  else if (isTouching) {
+    isTouching = false;
+    blockTouch = false;
+  }
+}
+
+void vibrate() {
+  if (canVibrate) {
+    if (isVibrating != wasVibrating) {
+      digitalWrite(vibration, isVibrating);
+      wasVibrating = isVibrating;
+      vibrationTime = millis();
+    }
+
+    if (amountOfVibrations >= maxAmountOfVibrations && !isVibrating) {
+      canVibrate = false;
+      return;
+    }
+
+    if (isVibrating && millis() - vibrationTime >= vibrationDuration) {
+      isVibrating = false;
+      amountOfVibrations++;
+    }
+    else if(!isVibrating && millis() - vibrationTime >= vibrationPauseDuration) {
+      isVibrating = true;
+    }
+  }
+}
 
 void batteryStatus(Led led, int cycles, float transitionTime, float highTime) {
   int ledPin[] {-1, -1, -1};
@@ -94,6 +210,9 @@ void setup() {
       batteryStatus(RED, 3, 0.5, 1.0);
     }
 
+  pinMode(touch, INPUT_PULLDOWN);
+  pinMode(vibration, OUTPUT);
+
   Serial.println(); 
   Serial.println(); 
 
@@ -109,5 +228,10 @@ void loop() {
 
     setNetwork(ssid, password);
     notify("IP:" + WiFi.localIP().toString());
+  }
+
+  if (deviceConnected) {
+    clickDetection();
+    vibrate();
   }
 } 

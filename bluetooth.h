@@ -72,6 +72,9 @@ void loopBLE() {
 }
 
 void notify(String value) {
+  long now = millis(); 
+
+  value += "\n";
   const char *newValue = value.c_str();
   pCharacteristic->setValue(newValue); 
   pCharacteristic->notify(); 
